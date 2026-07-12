@@ -1,0 +1,131 @@
+id: oyosefi/chronographer-skill
+name: Chronographer Skill
+version: 0.1.0
+schema_version: "1.0"
+description: |
+  Chronographer skill for Openclaw / agents that implements a small set of actions
+  to interact with the Chronographer reminders backend (list upcoming occurrences,
+  get next occurrence, get last completion, create tasks, and record completions).
+
+maintainers:
+  - name: oyosefi
+    email: ""
+
+homepage: https://github.com/oyosefi/chronographer
+license: MIT
+
+actions:
+  - id: list_upcoming
+    name: ListUpcoming
+    description: Return computed occurrences for a time window. Use display_tz to request local presentation.
+    input:
+      type: object
+      properties:
+        start:
+          type: string
+          format: date-time
+          description: ISO-8601 start of window (required)
+        end:
+          type: string
+          format: date-time
+          description: ISO-8601 end of window (required)
+        display_tz:
+          type: string
+          description: Optional IANA timezone ID for presentation (overrides user timezone)
+      required: [start, end]
+    output:
+      type: object
+      properties:
+        occurrences:
+          type: array
+          items:
+            type: object
+            properties:
+              occurrence_id: { type: string }
+              task_id: { type: string }
+              due_at_utc: { type: string, format: date-time }
+              local_due_at: { type: string }
+              is_overdue: { type: boolean }
+              task: { type: object }
+              last_completion_id: { type: ["string", "null"] }
+
+  - id: get_next
+    name: GetNext
+    description: Return the next computed occurrence for a single task.
+    input:
+      type: object
+      properties:
+        task_id:
+          type: string
+      required: [task_id]
+    output:
+      type: object
+      properties:
+        occurrence:
+          type: object
+
+  - id: get_last
+    name: GetLastCompletion
+    description: Return the most recent completion for a task (convenience).
+    input:
+      type: object
+      properties:
+        task_id:
+          type: string
+      required: [task_id]
+    output:
+      type: object
+      properties:
+        completion:
+          type: object
+
+  - id: create_task
+    name: CreateTask
+    description: Create a task in the Chronographer backend.
+    input:
+      type: object
+      properties:
+        task:
+          type: object
+          properties:
+            title: { type: string }
+            description: { type: string }
+            task_type: { type: string, enum: ["reminder","one_time","recurring"] }
+            start_at: { type: string, format: date-time }
+            timezone: { type: string }
+            recurrence_rrule: { type: string }
+            recurrence_anchor: { type: string, enum: ["calendar","completion"] }
+            remind_until_done: { type: boolean }
+            metadata: { type: object }
+          required: [title, task_type]
+      required: [task]
+    output:
+      type: object
+      properties:
+        task: { type: object }
+
+  - id: complete_task
+    name: CompleteTask
+    description: Record a completion for a task (journal entry).
+    input:
+      type: object
+      properties:
+        task_id: { type: string }
+        completed_at: { type: string, format: date-time }
+        notes: { type: string }
+        metadata: { type: object }
+        idempotency_key: { type: string }
+      required: [task_id, completed_at]
+    output:
+      type: object
+      properties:
+        completion: { type: object }
+
+handlers:
+  python:
+    module: handler.py
+    entrypoint: main
+
+examples:
+  - action: list_upcoming
+    input: { start: "2026-07-12T00:00:00-07:00", end: "2026-07-12T23:59:59-07:00" }
