@@ -31,8 +31,13 @@ async def api_client():
         import pytest
 
         pytest.skip(f"PostgreSQL integration database is unavailable: {exc}")
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        yield client
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            yield client
+    finally:
+        # asyncpg connections are bound to the event loop that created them.
+        # pytest-asyncio uses a fresh loop per test, so never pool across fixtures.
+        await engine.dispose()
 
 
 @pytest_asyncio.fixture
