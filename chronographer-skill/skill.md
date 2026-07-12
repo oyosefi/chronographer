@@ -1,38 +1,70 @@
-# Chronographer skill for Openclaw
+# Chronographer Skill
+
+ID: oyosefi/chronographer-skill
+Version: 0.1.0
+Specification: agentskills.io-style folder layout (SKILL.md + scripts/ + references/ + assets/)
 
 Summary
 
-A minimal Openclaw skill that integrates the Chronographer reminders backend with your Openclaw agent. The skill provides helper calls to list upcoming occurrences, create tasks, and record completions.
+Chronographer is a minimal skill that integrates with the Chronographer reminders backend. It provides actions the agent can call to list upcoming occurrences, query a task's next/last occurrence/completion, create tasks, and record completions.
 
-Configuration
+Why
 
-- CHRONO_API_URL — base URL of the Chronographer API (default: http://localhost:8000)
-- CHRONO_API_KEY — API key (Bearer token) for the agent
+The skill lets an agent (openclaw/chronographer skill) interact with a deterministic reminders backend instead of embedding scheduling logic in freeform LLM prompts. This reduces errors and centralizes recurrence, completion journaling, and timezone handling.
 
-Provided client helpers
+Actions
 
-- list_upcoming(start_iso, end_iso, display_tz=None)
-- get_next(task_id)
-- get_last(task_id)
-- create_task(payload)
-- complete_task(task_id, completed_at_iso, notes, metadata)
+Action schemas (input/output JSON Schema) live in `references/actions.json`.
+Key actions:
+- list_upcoming — returns computed occurrences for a time window
+- get_next — next occurrence for a single task
+- get_last — most recent completion (convenience)
+- create_task — create a task
+- complete_task — record a completion (journal entry)
 
-Usage
+Installation
 
-1. Install the skill directory into Openclaw's skills folder or reference it in your skill loader.
-2. Configure CHRONO_API_URL and CHRONO_API_KEY in environment or Openclaw secrets.
-3. Use the provided client helper functions in the skill handlers to poll /upcoming, surface reminders, and log completions.
+1. Place this folder under Openclaw's skills directory or point the agent's skill loader to it.
+2. Install runtime deps for the handler: `pip install -r scripts/requirements.txt` (or bundle in a virtualenv).
+3. Configure these environment variables for the skill:
+   - CHRONO_API_URL — base URL of the Chronographer API (default: http://localhost:8000)
+   - CHRONO_API_KEY — bearer token used by the skill to authenticate
 
-Example snippet (pseudocode)
+Runtime & Files
 
-```python
-from client import ChronoClient
+- scripts/
+  - handler.py — CLI-style handler that accepts an action name and a JSON payload on stdin and returns JSON on stdout. Intended as the invokable entrypoint for the skill runtime.
+  - client.py — minimal HTTP client used by the handler to call the Chronographer REST API.
+  - requirements.txt — Python dependencies for the handler
 
-client = ChronoClient()
-upcoming = client.list_upcoming("2026-07-12T00:00:00-07:00","2026-07-12T23:59:59-07:00")
-# Process upcoming and send messages via Telegram or otherwise
+- references/
+  - actions.json — typed input/output schemas for each action (JSON Schema).
+  - skill.yaml (legacy) — previously generated manifest (moved here).
+  - skill.md (legacy) — previous human-oriented skill description (moved here).
+
+- assets/ — static templates or other resources (currently empty)
+
+Examples
+
+List upcoming (example using handler):
+
+```bash
+echo '{"start":"2026-07-12T00:00:00-07:00","end":"2026-07-12T23:59:59-07:00"}' | python scripts/handler.py list_upcoming
 ```
 
-Notes
+Create a task (using client library in scripts/client.py):
 
-This skill and the client are intentionally minimal. The implementation in `chronographer-skill/client.py` is a practical example the agent can call directly. Feel free to extend this skill with richer dialogs, triage flows, or interactive confirmation steps.
+```python
+from scripts.client import ChronoClient
+c = ChronoClient()
+c.create_task({"title":"Take out trash","task_type":"recurring","start_at":"2026-07-14T19:00:00-07:00","recurrence_rrule":"FREQ=WEEKLY;BYDAY=WE","recurrence_anchor":"calendar"})
+```
+
+Developer notes
+
+- Action schemas are authoritative in `references/actions.json`. The handler expects inputs to match those schemas.
+- The skill is intentionally minimal; extend handler.py to add richer validation, interactive dialogs, or a long-running adapter.
+
+Contact
+
+Maintainer: oyosefi
