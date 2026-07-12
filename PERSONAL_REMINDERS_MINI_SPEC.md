@@ -31,6 +31,15 @@ Out of scope (initial): push notifications (Telegram/SMS), attachments (files/im
 
 - User-level timezone: tasks and occurrence computation default to the user's timezone. The API accepts timezone-aware ISO-8601 timestamps.
 
+- Metadata and structured fields: Use `description` for human-readable context and the `metadata` JSONB field for structured or machine-parsable data. To reduce ambiguity, the service documents a small set of optional, reserved keys and otherwise permits ad-hoc fields under `metadata.custom`:
+  - `cycle`: {"values": ["left","right"], "next": "left"} — backend auto-advances the `next` value to the next element in `values` each time a completion is logged when present.
+  - `expire_policy`: {"type":"expire_after_days","days":X} (optional — deferred)
+  - `reminder_window_hours`: integer — how far in advance to surface this occurrence in upcoming queries
+  - `location`: text
+  - `priority`: integer
+
+On creation: the agent provides `metadata` in the task payload. On completion: include `metadata.cycle_value` (optional) and free-text `notes`. The backend will record the observed `cycle_value` inside the completion's `metadata` and, when a `cycle` object is present on the task, auto-advance the task's `metadata.cycle.next` to the next value in the `values` array. This blends freeform description with lightweight structured fields for automation.
+
 ---
 
 ## Data model (PostgreSQL sketch)
@@ -134,6 +143,8 @@ Base path: `/api/v1`
   - Behavior: create completion, append to completions table, create audit record if edited later, and if task.recurrence_anchor == 'completion' update tasks.last_completed_at to completed_at.
 
 - GET /api/v1/tasks/{task_id}/completions
+- GET /api/v1/tasks/{task_id}/last
+  - Returns the most recent completion for the task (convenience).
 - PATCH /api/v1/tasks/{task_id}/completions/{completion_id}
   - Edits create a completion_edits row and set `edited=true` on completion.
 
@@ -202,7 +213,7 @@ Expected repo artifacts to implement:
 - `openapi.yaml` (API contract)
 - `src/app` (FastAPI app) with Dockerfile
 - DB migration scripts (e.g., Alembic)
-- `chronographer-skill/` — sample client wrapper used by openclaw to call the API (simple functions: list_upcoming, create_task, complete_task)
+- `chronographer-skill/` — includes `skill.md` (openclaw skill manifest) and a small client script (`client.py`) implementing helper functions: list_upcoming, get_next, get_last, create_task, complete_task. The skill directory includes usage examples and a short install/config guide.
 - `tests/` (unit + integration tests)
 - CI workflow (GitHub Actions) to run tests and build image
 - Deployment guide for Azure (App Service/Container + Azure Database for PostgreSQL). Include env vars: DATABASE_URL, API_KEY, TZ, etc.
