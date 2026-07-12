@@ -6,7 +6,7 @@ Status: draft
 
 This service is a small backend that stores reminders, one-time tasks, recurring tasks, and completion journal entries so an agent (openclaw / chronographer skill) can poll for upcoming work and log completions deterministically. It is single-user, poll-only (no outbound notifications), uses RFC5545 RRULE for recurrence, and supports both calendar-anchored and completion-anchored recurrence. Timezone is per-user (default) and timestamps are stored in UTC with timezone-aware conversion.
 
-Hosting target: Azure (App Service / Containers) with Azure Database for PostgreSQL (or equivalent). Authentication: single static API key (Bearer token) provisioned manually.
+Hosting target: Start with a local docker-compose deployment (web + PostgreSQL with a persistent volume) on your VM; optionally migrate to Azure App Service/Containers with Azure Database for PostgreSQL later. Authentication: single static API key (Bearer token) provisioned manually.
 
 Goals:
 - Deterministic recurrence handling (RRULE + anchored-to-last-completion support)
@@ -23,7 +23,7 @@ Out of scope (initial): push notifications (Telegram/SMS), attachments (files/im
 
 - Task: persistent object describing something to do.
   - Types: `reminder` (one-time, time set), `one_time` (task scheduled once), `recurring` (repeats by rule).
-  - Fields include: title, description, start_at, due_at, timezone, recurrence_rrule (RFC5545), recurrence_anchor (`calendar` | `completion`), remind_until_done (bool), expire_after_seconds (optional), metadata (json), status.
+  - Fields include: title, description, start_at, due_at, timezone, recurrence_rrule (RFC5545), recurrence_anchor (`calendar` | `completion`), remind_until_done (bool), metadata (json), status.
 
 - Occurrence: a computed scheduled instance of a Task (not stored persistently by default). For `calendar`-anchored recurrences it is generated from the task's DTSTART + RRULE. For `completion`-anchored tasks, occurrences are generated using the task's last_completed_at (or start_at if none) as DTSTART.
 
@@ -43,7 +43,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE TABLE users (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   display_name text,
-  timezone text NOT NULL DEFAULT 'UTC',
+  timezone text NOT NULL DEFAULT 'America/Los_Angeles',
   created_at timestamptz DEFAULT now()
 );
 
@@ -59,7 +59,6 @@ CREATE TABLE tasks (
   recurrence_rrule text,
   recurrence_anchor text NOT NULL CHECK (recurrence_anchor IN ('calendar','completion')) DEFAULT 'calendar',
   remind_until_done boolean DEFAULT false,
-  expire_after_seconds integer NULL,
   last_completed_at timestamptz NULL,
   metadata jsonb DEFAULT '{}'::jsonb,
   status text DEFAULT 'active',
@@ -139,8 +138,8 @@ Base path: `/api/v1`
   - Edits create a completion_edits row and set `edited=true` on completion.
 
 - GET /api/v1/upcoming?start=...&end=...&include_overdue=true
-  - Returns computed occurrences for all tasks in the window. Each item contains: occurrence_id, task_id, due_at, is_overdue, task snapshot, last_completion_id (if any).
-  - Implementation: compute server-side using RRULE and anchor rules. Cap occurrences per task (e.g., max 500) to avoid abuse.
+  - Returns computed occurrences for all tasks in the window. Each item contains: occurrence_id, task_id, due_at_utc, local_due_at, is_overdue, task snapshot, last_completion_id (if any). Optional `display_tz` query param requests local conversions for travel (default=user timezone).
+  - Implementation: compute server-side using RRULE and anchor rules in the task timezone. Cap occurrences per task (e.g., max 500) to avoid abuse.
 
 - GET /api/v1/tasks/{task_id}/next
   - Returns next occurrence for that task.
@@ -156,9 +155,9 @@ Notes on idempotency: support idempotency_key on creates to prevent duplicate co
 
 - Calendar-anchored (BYDAY-based): `recurrence_anchor = 'calendar'`, `recurrence_rrule = 'FREQ=WEEKLY;BYDAY=WE'` — occurrences generated from the task.start_at / DTSTART; completions do not shift the schedule.
 
-- Completion-anchored: `recurrence_anchor = 'completion'`, `recurrence_rrule = 'FREQ=MONTHLY;INTERVAL=2'` — next due is computed from last_completed_at. If last_completed_at is null, use start_at (or created_at) as seed.
+- Completion-anchored: `recurrence_anchor = 'completion'`, `recurrence_rrule = 'FREQ=MONTHLY;INTERVAL=2'` — next due is computed from last_completed_at. When computing the next occurrence, convert last_completed_at (or start_at if null) to the task timezone and use that value as DTSTART for the RRULE generator. If a completion timestamp is naive, interpret it in the user's timezone when recording it.
 
-Example: Replace filter every 2 months — recurrence_anchor=completion with RRULE FREQ=MONTHLY;INTERVAL=2. When a completion is logged, update last_completed_at and the next occurrence is last_completed_at + 2 months (computed via RRULE library using last_completed_at as DTSTART).
+Example: Replace filter every 2 months — recurrence_anchor=completion with RRULE FREQ=MONTHLY;INTERVAL=2. When a completion is logged, record completed_at (stored in UTC), update tasks.last_completed_at, convert it to the task timezone, and compute the next occurrence via the RRULE library with that DTSTART.
 
 Missed occurrences and per-task policy:
 - If `remind_until_done=true`, include overdue occurrences when the agent requests upcoming items until a completion is recorded for that occurrence.
@@ -169,9 +168,11 @@ Missed occurrences and per-task policy:
 
 ## Timezones and DST
 
-- Timestamps are stored in UTC. The API accepts timezone-aware ISO-8601 values.
-- Occurrence generation should use the user's timezone (stored on users.timezone) unless task.timezone overrides it.
-- Use a timezone-aware recurrence library (python-dateutil or `rrule` + `zoneinfo`) and test DST edge cases.
+- Timestamps are stored in UTC. The API accepts timezone-aware ISO-8601 values; naive datetimes are interpreted in the user's timezone (users.timezone, default America/Los_Angeles).
+- Each task may optionally set a timezone; otherwise the user's timezone is used. Occurrence generation uses task.timezone and is timezone-aware so recurrences preserve local wall-clock time across DST.
+- The `/upcoming` endpoint accepts an optional `display_tz` query param; responses include both `due_at_utc` and `local_due_at` (converted to the requested display_tz) to support travel-aware display.
+- When logging a completion, `completed_at` should be timezone-aware (or will be interpreted in the user's timezone if naive). Store `completed_at` in UTC; for completion-anchored recurrences convert `last_completed_at` to the task timezone and use it as DTSTART for RRULE computation.
+- Use `zoneinfo` + `python-dateutil`/`rrule` and thoroughly test DST edge cases.
 
 ---
 
