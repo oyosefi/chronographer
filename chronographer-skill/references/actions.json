@@ -11,7 +11,8 @@
           "properties": {
             "start": { "type": "string", "format": "date-time" },
             "end": { "type": "string", "format": "date-time" },
-            "display_tz": { "type": "string" }
+            "display_tz": { "type": "string" },
+            "include_overdue": { "type": "boolean", "default": false }
           },
           "required": ["start", "end"]
         },
@@ -88,9 +89,10 @@
             "completed_at": { "type": "string", "format": "date-time" },
             "notes": { "type": "string" },
             "metadata": { "type": "object" },
-            "idempotency_key": { "type": "string" }
+            "idempotency_key": { "type": "string" },
+            "occurrence_id": { "type": "string", "format": "uuid" }
           },
-          "required": ["task_id", "completed_at"]
+          "required": ["task_id"]
         },
         "output": { "type": "object", "properties": { "completion": { "type": "object" } } }
       }

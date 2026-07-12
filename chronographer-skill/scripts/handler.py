@@ -17,7 +17,6 @@ The agentskills runner can invoke the handler.py module with the same contract.
 
 import sys
 import json
-import os
 
 from client import ChronoClient
 
@@ -28,8 +27,14 @@ def _read_payload():
         if not raw or raw.strip() == "":
             return {}
         return json.loads(raw)
-    except Exception:
-        return {}
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"invalid JSON input: {exc}") from exc
+
+
+def _require(payload, *names):
+    missing = [name for name in names if payload.get(name) is None]
+    if missing:
+        raise ValueError(f"missing required field(s): {', '.join(missing)}")
 
 
 def _output(obj):
@@ -41,7 +46,11 @@ def main():
         print(json.dumps({"error": "missing action argument"}))
         sys.exit(2)
     action = sys.argv[1]
-    payload = _read_payload()
+    try:
+        payload = _read_payload()
+    except ValueError as e:
+        _output({"error": str(e)})
+        sys.exit(2)
 
     try:
         client = ChronoClient()
@@ -50,39 +59,48 @@ def main():
         sys.exit(1)
 
     try:
-        if action == 'list_upcoming':
-            start = payload.get('start')
-            end = payload.get('end')
-            display_tz = payload.get('display_tz')
-            result = client.list_upcoming(start, end, display_tz)
+        if action == "list_upcoming":
+            start = payload.get("start")
+            end = payload.get("end")
+            _require(payload, "start", "end")
+            display_tz = payload.get("display_tz")
+            include_overdue = payload.get("include_overdue", False)
+            result = client.list_upcoming(start, end, display_tz, include_overdue)
             _output(result)
             return
 
-        if action == 'get_next':
-            task_id = payload.get('task_id')
+        if action == "get_next":
+            task_id = payload.get("task_id")
+            _require(payload, "task_id")
             result = client.get_next(task_id)
             _output(result)
             return
 
-        if action == 'get_last':
-            task_id = payload.get('task_id')
+        if action == "get_last":
+            task_id = payload.get("task_id")
+            _require(payload, "task_id")
             result = client.get_last_completion(task_id)
             _output(result)
             return
 
-        if action == 'create_task':
-            task = payload.get('task')
+        if action == "create_task":
+            task = payload.get("task")
+            _require(payload, "task")
             result = client.create_task(task)
             _output(result)
             return
 
-        if action == 'complete_task':
-            task_id = payload.get('task_id')
-            completed_at = payload.get('completed_at')
-            notes = payload.get('notes')
-            metadata = payload.get('metadata')
-            idempotency_key = payload.get('idempotency_key')
-            result = client.complete_task(task_id, completed_at, notes, metadata, idempotency_key)
+        if action == "complete_task":
+            task_id = payload.get("task_id")
+            _require(payload, "task_id")
+            completed_at = payload.get("completed_at")
+            notes = payload.get("notes")
+            metadata = payload.get("metadata")
+            idempotency_key = payload.get("idempotency_key")
+            occurrence_id = payload.get("occurrence_id")
+            result = client.complete_task(
+                task_id, completed_at, notes, metadata, idempotency_key, occurrence_id
+            )
             _output(result)
             return
 
@@ -93,5 +111,5 @@ def main():
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

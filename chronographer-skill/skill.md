@@ -29,6 +29,12 @@ Key actions:
 - create_task — create a task
 - complete_task — record a completion (journal entry)
 
+`list_upcoming` accepts `include_overdue` for tasks configured with
+`remind_until_done`. `complete_task` accepts an optional `occurrence_id` from an
+upcoming response; when omitted, the backend deterministically associates the
+latest due, incomplete occurrence. Supplying an `idempotency_key` is recommended
+for agent retries.
+
 Installation
 
 1. Place this folder under Openclaw's skills directory or point the agent's skill loader to it.

@@ -1,26 +1,36 @@
-version: '3.8'
-
 services:
   web:
     build: ./src/app
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/chronographer
-      - API_KEY=${API_KEY}
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/chronographer
+      API_KEY: ${API_KEY:?Set API_KEY in .env}
+      DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-America/Los_Angeles}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
   db:
     image: postgres:15
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: chronographer
     volumes:
       - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d chronographer"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 volumes:
   db_data:
-    driver: local
