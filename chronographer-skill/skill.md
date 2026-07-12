@@ -1,8 +1,15 @@
-# Chronographer Skill
+---
+name: chronographer-skill
+description: Integrates the Chronographer reminders backend with Openclaw agents. Provides actions to list upcoming occurrences, query next/last completions, create tasks, and record completions. Use when an agent needs deterministic reminder storage, recurrence handling, and completion journaling.
+license: MIT
+metadata:
+  author: oyosefi
+  version: "0.1.0"
+  homepage: "https://github.com/oyosefi/chronographer"
+compatibility: "Python 3.10+, requests"
+---
 
-ID: oyosefi/chronographer-skill
-Version: 0.1.0
-Specification: agentskills.io-style folder layout (SKILL.md + scripts/ + references/ + assets/)
+# Chronographer Skill
 
 Summary
 
