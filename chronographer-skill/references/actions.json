@@ -1,0 +1,99 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Chronographer skill actions",
+  "type": "object",
+  "properties": {
+    "list_upcoming": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "start": { "type": "string", "format": "date-time" },
+            "end": { "type": "string", "format": "date-time" },
+            "display_tz": { "type": "string" }
+          },
+          "required": ["start", "end"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "occurrences": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "occurrence_id": { "type": "string" },
+                  "task_id": { "type": "string" },
+                  "due_at_utc": { "type": "string", "format": "date-time" },
+                  "local_due_at": { "type": "string" },
+                  "is_overdue": { "type": "boolean" },
+                  "task": { "type": "object" },
+                  "last_completion_id": { "type": ["string", "null"] }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "get_next": {
+      "type": "object",
+      "properties": {
+        "input": { "type": "object", "properties": { "task_id": { "type": "string" } }, "required": ["task_id"] },
+        "output": { "type": "object", "properties": { "occurrence": { "type": "object" } } }
+      }
+    },
+    "get_last": {
+      "type": "object",
+      "properties": {
+        "input": { "type": "object", "properties": { "task_id": { "type": "string" } }, "required": ["task_id"] },
+        "output": { "type": "object", "properties": { "completion": { "type": "object" } } }
+      }
+    },
+    "create_task": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "task": {
+              "type": "object",
+              "properties": {
+                "title": { "type": "string" },
+                "description": { "type": "string" },
+                "task_type": { "type": "string", "enum": ["reminder", "one_time", "recurring"] },
+                "start_at": { "type": "string", "format": "date-time" },
+                "timezone": { "type": "string" },
+                "recurrence_rrule": { "type": "string" },
+                "recurrence_anchor": { "type": "string", "enum": ["calendar", "completion"] },
+                "remind_until_done": { "type": "boolean" },
+                "metadata": { "type": "object" }
+              },
+              "required": ["title", "task_type"]
+            }
+          },
+          "required": ["task"]
+        },
+        "output": { "type": "object", "properties": { "task": { "type": "object" } } }
+      }
+    },
+    "complete_task": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "task_id": { "type": "string" },
+            "completed_at": { "type": "string", "format": "date-time" },
+            "notes": { "type": "string" },
+            "metadata": { "type": "object" },
+            "idempotency_key": { "type": "string" }
+          },
+          "required": ["task_id", "completed_at"]
+        },
+        "output": { "type": "object", "properties": { "completion": { "type": "object" } } }
+      }
+    }
+  }
+}
