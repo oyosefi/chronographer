@@ -36,4 +36,3 @@ if context.is_offline_mode():
         context.run_migrations()
 else:
     asyncio.run(run_async_migrations())
-

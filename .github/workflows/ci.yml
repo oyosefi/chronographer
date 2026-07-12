@@ -31,7 +31,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -e "src/app[dev]"
-      - run: ruff check src/app/app src/app/tests scripts chronographer-skill/scripts
+      - run: ruff check src/app/app src/app/migrations src/app/tests scripts chronographer-skill/scripts
       - run: alembic -c src/app/alembic.ini upgrade head
         env:
           PYTHONPATH: src/app
